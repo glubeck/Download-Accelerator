@@ -14,6 +14,9 @@ class downloadThread:
 
 
 def main(argv):
+
+    global file
+    
     threadNum = 0
     url = ''
     try:
@@ -23,18 +26,18 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-n':
-            threadNum = arg
+            threadNum = int(arg)
 
     def readBytes(start, end, request, file):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
         f = urllib2.urlopen(request)
         output = f.read()
-        file = open("file.zip", "w")
         file.write(output)
-        file.close()
         print "hi"
     
     url =  args[0]
+
+    file = open("file.zip", "w")
 
     response = requests.head(url)
 
@@ -42,8 +45,6 @@ def main(argv):
     print contentLength
 
     request = urllib2.Request(url)
-
-    
 
     threads = []
     i = 0
@@ -57,15 +58,11 @@ def main(argv):
         else:
             remainder = contentLength%100
             print i + remainder
-            
-            #t = threading.Thread(target=readBytes, args=(i, i+remainder-1, request, file,))
-            #threads.append(t)
-            #t.start()
+            t = threading.Thread(target=readBytes, args=(i, i+remainder, request, file,))
+            threads.append(t)
+            t.start()
             break
 
-    
-        
-    
     
     
 if __name__ == "__main__":
