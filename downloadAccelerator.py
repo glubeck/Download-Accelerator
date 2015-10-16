@@ -15,8 +15,10 @@ class downloadThread:
 
 def main(argv):
 
-    global file
+    global numThreads
+    global stringList
     
+    stringList = []
     numThreads = 0
     url = ''
     try:
@@ -28,44 +30,56 @@ def main(argv):
         if opt == '-n':
             numThreads = int(arg)
 
-    def readBytes(start, end, request, file):
+    def writeToFile():
+        file = open("file.zip", "w")
+        for k in stringList:
+            file.write(k)
+        file.close()
+
+            
+    def readBytes(start, end, request, index):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
         f = urllib2.urlopen(request)
         output = f.read()
-        file.write(output)
-        print "hi"
+        stringList.insert(index, output)
+        if index == numThreads-1:
+            writeToFile()
+        
+        
     
     url =  args[0]
-
-    file = open("file.zip", "w")
 
     response = requests.head(url)
 
     contentLength = int(response.headers.get('content-length'))
     rangeLength = contentLength/(numThreads-1)
     remainder = contentLength%(numThreads-1)
-    print contentLength
-    print rangeLength
-    print rangeLength*(numThreads-1) + remainder
+    #print contentLength
+    #print rangeLength
+    #print rangeLength*(numThreads-1) + remainder
 
     request = urllib2.Request(url)
 
     threads = []
+
     i = 0
+    j = 0
     while 0 < contentLength:
         if (contentLength/rangeLength) > 0:
-            t = threading.Thread(target=readBytes, args=(i, i+rangeLength, request, file,))
+            t = threading.Thread(target=readBytes, args=(i, i+rangeLength-1, request, j,))
             threads.append(t)
             t.start()
+            j += 1
             i += rangeLength
             contentLength -= rangeLength
         else:
             remainder = contentLength%100
-            t = threading.Thread(target=readBytes, args=(i, i+remainder, request, file,))
+            t = threading.Thread(target=readBytes, args=(i, i+remainder, request, j,))
             threads.append(t)
             t.start()
             contentLength -= remainder
             break
+
 
     
     
