@@ -17,7 +17,7 @@ def main(argv):
 
     global file
     
-    threadNum = 0
+    numThreads = 0
     url = ''
     try:
         opts, args = getopt.getopt(argv,"n:")
@@ -26,7 +26,7 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-n':
-            threadNum = int(arg)
+            numThreads = int(arg)
 
     def readBytes(start, end, request, file):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
@@ -42,25 +42,29 @@ def main(argv):
     response = requests.head(url)
 
     contentLength = int(response.headers.get('content-length'))
+    rangeLength = contentLength/(numThreads-1)
+    remainder = contentLength%(numThreads-1)
     print contentLength
+    print rangeLength
+    print rangeLength*(numThreads-1) + remainder
 
     request = urllib2.Request(url)
 
     threads = []
     i = 0
     while 0 < contentLength:
-        if (contentLength/100) > 0:
-            t = threading.Thread(target=readBytes, args=(i, i+99, request, file,))
+        if (contentLength/rangeLength) > 0:
+            t = threading.Thread(target=readBytes, args=(i, i+rangeLength, request, file,))
             threads.append(t)
             t.start()
-            i += 100
-            contentLength -= 100
+            i += rangeLength
+            contentLength -= rangeLength
         else:
             remainder = contentLength%100
-            print i + remainder
             t = threading.Thread(target=readBytes, args=(i, i+remainder, request, file,))
             threads.append(t)
             t.start()
+            contentLength -= remainder
             break
 
     
