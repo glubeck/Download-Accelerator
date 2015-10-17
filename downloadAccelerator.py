@@ -7,13 +7,6 @@ import httplib
 import timeit
 from urlparse import urlparse
 
-
-class downloadThread:
-    def __init__(self, index, thread):
-        self.index = index
-        self.thread = thread
-
-
 def main(argv):
 
     global numThreads
@@ -47,8 +40,7 @@ def main(argv):
             file.write(temp)
         file.close()
         global stop
-        stop = timeit.default_timer()
-        
+        stop = timeit.default_timer()        
         print url + " " + str(numThreads) + " " + str(numOfBytes) + " " + str(stop-begin)
         
     def readBytes(start, end, request, index, cond):
@@ -109,7 +101,7 @@ def main(argv):
         remainder = rangeLength + (contentLength%numThreads)
         
     request = urllib2.Request(url)
-    threads = []
+    
     condition = threading.Condition()
     i = 0
     j = 0
@@ -119,27 +111,21 @@ def main(argv):
     while 0 < contentLength:
         if numThreads == 1:
             t = threading.Thread(target=readBytesNoParallel, args=(0, contentLength, request,))
-            threads.append(t)
             t.start()
             break
         elif (contentLength/rangeLength) > 1:
             t = threading.Thread(target=readBytes, args=(i, i+rangeLength-1, request, j, condition,))
-            threads.append(t)
             t.start()
             j += 1
             i += rangeLength
             contentLength -= rangeLength
     
         elif contentLength/rangeLength == 1:
-            
             t = threading.Thread(target=readBytes, args=(i, i+remainder, request, j, condition,))
-            threads.append(t)
             t.start()
             contentLength -= remainder
             break
 
-
-    
     
 if __name__ == "__main__":
    main(sys.argv[1:])
