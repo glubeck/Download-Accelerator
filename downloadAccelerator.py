@@ -18,14 +18,15 @@ class downloadThread:
 def main(argv):
 
     global numThreads
-    global stringList
     global fileName
-    global lastString
-
-    lastString = []
-    stringList = []
+    global data
+    global completed
+    
+    completed = 0    
+    data = {}
     numThreads = 0
     url = ''
+    
     try:
         opts, args = getopt.getopt(argv,"n:")
     except getopt.GetoptError:
@@ -35,37 +36,35 @@ def main(argv):
         if opt == '-n':
             numThreads = int(arg)
 
-    def writeToFile(list):
+    def writeToFile():
         file = open(fileName, "w")
-        
-        for k in list:
-            file.write(k)
-
-        for l in lastString:
-            file.write(l)
-            
+        for k in range(numThreads):
+            temp = data[k]
+            file.write(temp)
         file.close()
 
             
-    def readBytes(start, end, request, index):
+    def readBytes(start, end, request, index, cond):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
-        #request.headers["Accept-Encoding"] = "identity"
         f = urllib2.urlopen(request, "r")
         output = f.read()
+        data[index] = output
         
-        #file = open(fileName, "w")
-        #file.write(output)
-        #file.close()
-
         if index < numThreads-1:
-            stringList.insert(index, output)
-        else:
-            lastString.append(output)
-        if index == numThreads-2:
-            writeToFile(stringList)
-        #if index == numThreads-1:
-        #    print stringList
-        #    writeToFile(stringList)
+            global completed
+            completed += 1
+            with cond:
+                cond.notifyAll()
+        
+        if index == numThreads-1:
+            print output
+            while completed < numThreads-1:
+                with cond:
+                    cond.wait()
+                
+            
+            writeToFile()
+
         
         
     
@@ -99,12 +98,12 @@ def main(argv):
     request = urllib2.Request(url)
 
     threads = []
-
+    condition = threading.Condition()
     i = 0
     j = 0
     while 0 < contentLength:
         if (contentLength/rangeLength) > 0:
-            t = threading.Thread(target=readBytes, args=(i, i+rangeLength-1, request, j,))
+            t = threading.Thread(target=readBytes, args=(i, i+rangeLength-1, request, j, condition,))
             threads.append(t)
             t.start()
             j += 1
@@ -112,7 +111,7 @@ def main(argv):
             contentLength -= rangeLength
         else:
             remainder = contentLength%100
-            t = threading.Thread(target=readBytes, args=(i, i+remainder, request, j,))
+            t = threading.Thread(target=readBytes, args=(i, i+remainder, request, j, condition,))
             threads.append(t)
             t.start()
             contentLength -= remainder
