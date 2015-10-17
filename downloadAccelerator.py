@@ -5,6 +5,8 @@ import urllib2
 import sys, getopt, requests
 import threading
 import httplib
+from urlparse import urlparse
+import base64
 
 
 class downloadThread:
@@ -17,7 +19,10 @@ def main(argv):
 
     global numThreads
     global stringList
-    
+    global fileName
+    global lastString
+
+    lastString = []
     stringList = []
     numThreads = 0
     url = ''
@@ -30,34 +35,67 @@ def main(argv):
         if opt == '-n':
             numThreads = int(arg)
 
-    def writeToFile():
-        file = open("file.zip", "w")
-        for k in stringList:
+    def writeToFile(list):
+        file = open(fileName, "w")
+        
+        for k in list:
             file.write(k)
+
+        for l in lastString:
+            file.write(l)
+            
         file.close()
 
             
     def readBytes(start, end, request, index):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
-        f = urllib2.urlopen(request)
+        #request.headers["Accept-Encoding"] = "identity"
+        f = urllib2.urlopen(request, "r")
         output = f.read()
-        stringList.insert(index, output)
-        if index == numThreads-1:
-            writeToFile()
+        
+        #file = open(fileName, "w")
+        #file.write(output)
+        #file.close()
+
+        if index < numThreads-1:
+            stringList.insert(index, output)
+        else:
+            lastString.append(output)
+        if index == numThreads-2:
+            writeToFile(stringList)
+        #if index == numThreads-1:
+        #    print stringList
+        #    writeToFile(stringList)
         
         
     
     url =  args[0]
 
-    response = requests.head(url)
+    fileName = url.rsplit('/',1)[-1]
 
-    contentLength = int(response.headers.get('content-length'))
+    if fileName == "":
+        fileName = "index.html"
+    
+
+    parsedURL = urlparse(url)
+    
+    conn = httplib.HTTPConnection(parsedURL.netloc, 80)
+    path = parsedURL.path
+    if len(path) is 0:
+        path = '/'
+    conn.request('HEAD', path)
+    res = conn.getresponse()
+    header = res.getheader('Content-Length')
+    contentLength = int(header)
+
+    print contentLength
+    
     rangeLength = contentLength/(numThreads-1)
     remainder = contentLength%(numThreads-1)
-    #print contentLength
-    #print rangeLength
-    #print rangeLength*(numThreads-1) + remainder
+    
 
+    print contentLength
+    
     request = urllib2.Request(url)
 
     threads = []
