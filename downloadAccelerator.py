@@ -1,12 +1,11 @@
 #!/usr/bin/python
 
-import urllib
 import urllib2
 import sys, getopt, requests
 import threading
 import httplib
+import timeit
 from urlparse import urlparse
-import base64
 
 
 class downloadThread:
@@ -21,6 +20,10 @@ def main(argv):
     global fileName
     global data
     global completed
+    global stop
+    global begin
+    global url
+    global numOfBytes
     
     completed = 0    
     data = {}
@@ -36,14 +39,18 @@ def main(argv):
         if opt == '-n':
             numThreads = int(arg)
 
+            
     def writeToFile():
         file = open(fileName, "w")
         for k in range(numThreads):
             temp = data[k]
             file.write(temp)
         file.close()
-
-            
+        global stop
+        stop = timeit.default_timer()
+        
+        print url + " " + str(numThreads) + " " + str(numOfBytes) + " " + str(stop-begin)
+        
     def readBytes(start, end, request, index, cond):
         request.headers['Range'] = 'bytes=%s-%s' % (start, end)
         f = urllib2.urlopen(request, "r")
@@ -57,15 +64,23 @@ def main(argv):
                 cond.notifyAll()
         
         if index == numThreads-1:
-            print output
             while completed < numThreads-1:
                 with cond:
                     cond.wait()
                 
-            
             writeToFile()
 
+    def readBytesNoParallel(start, end, request):
         
+        request.headers['Range'] = 'bytes=%s-%s' % (start, end)
+        f = urllib2.urlopen(request, "r")
+        output = f.read()
+        file = open(fileName, "w")
+        file.write(output)
+        file.close()
+        global begin
+        stop = timeit.default_timer()
+        print url + " " + str(numThreads) + " " + str(numOfBytes) + " " + str(stop-begin)
         
     
     url =  args[0]
@@ -75,7 +90,7 @@ def main(argv):
     if fileName == "":
         fileName = "index.html"
     
-
+    
     parsedURL = urlparse(url)
     
     conn = httplib.HTTPConnection(parsedURL.netloc, 80)
@@ -86,31 +101,37 @@ def main(argv):
     res = conn.getresponse()
     header = res.getheader('Content-Length')
     contentLength = int(header)
-
-    print contentLength
-    
-    rangeLength = contentLength/(numThreads-1)
-    remainder = contentLength%(numThreads-1)
-    
-
-    print contentLength
-    
+    numOfBytes = contentLength
+    rangeLength = 0
+    remainder = 0
+    if numThreads > 1:
+        rangeLength = contentLength/numThreads
+        remainder = rangeLength + (contentLength%numThreads)
+        
     request = urllib2.Request(url)
-
     threads = []
     condition = threading.Condition()
     i = 0
     j = 0
+    global begin
+    begin = timeit.default_timer()
+    
     while 0 < contentLength:
-        if (contentLength/rangeLength) > 0:
+        if numThreads == 1:
+            t = threading.Thread(target=readBytesNoParallel, args=(0, contentLength, request,))
+            threads.append(t)
+            t.start()
+            break
+        elif (contentLength/rangeLength) > 1:
             t = threading.Thread(target=readBytes, args=(i, i+rangeLength-1, request, j, condition,))
             threads.append(t)
             t.start()
             j += 1
             i += rangeLength
             contentLength -= rangeLength
-        else:
-            remainder = contentLength%100
+    
+        elif contentLength/rangeLength == 1:
+            
             t = threading.Thread(target=readBytes, args=(i, i+remainder, request, j, condition,))
             threads.append(t)
             t.start()
